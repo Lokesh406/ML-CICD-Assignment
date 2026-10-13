@@ -1,0 +1,71 @@
+
+name: ML Model CI-CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Continuous Integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Train and evaluate ML model
+        run: python model.py
+
+      - name: Run automated tests
+        run: python -m pytest -v
+
+      - name: Prepare GitHub Pages website
+        run: |
+          mkdir -p public
+          python - <<'PY'
+          from pathlib import Path
+
+          accuracy = Path("accuracy.txt").read_text().strip()
+          html = Path("index.html").read_text()
+          html = html.replace("{{ACCURACY}}", accuracy)
+          Path("public/index.html").write_text(html)
+          PY
+
+      - name: Upload website artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  cd:
+    name: Continuous Deployment
+    needs: ci
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
